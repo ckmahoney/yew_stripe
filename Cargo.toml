@@ -6,6 +6,10 @@ edition = "2021"
 [dependencies]
 wasm-bindgen = "0.2.100"
 yew = "0.21.0"
+yew-interop = { git = "https://github.com/Madoshakalaka/yew-interop.git", features = [
+    'yew-stable'
+] }
+
 
 
 web-sys = { version = "0.3", features = [
@@ -31,3 +35,6 @@ web-sys = { version = "0.3", features = [
     'BlobEvent', 
     'Navigator',
 ] }
+wasm-bindgen-futures = "0.4.50"
+serde = "1.0.219"
+serde-wasm-bindgen = "0.6.5"
