@@ -41,7 +41,7 @@
 //! # Example
 //! ```ignore
 //! use wasm_bindgen::JsValue;
-//! use stripe_bindings::{Stripe, Elements, PaymentElement};
+//! use crate::bindings::{Stripe, Elements, PaymentElement};
 //!
 //! // Load Stripe.js separately via `yew-interop`.
 //! let stripe: Stripe = Stripe::new("pk_test_...");
