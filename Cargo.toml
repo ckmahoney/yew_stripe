@@ -1,0 +1,33 @@
+[package]
+name = "yew_stripe"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+wasm-bindgen = "0.2.100"
+yew = "0.21.0"
+
+
+web-sys = { version = "0.3", features = [
+    'Document',
+    'DragEvent',
+    'DomRect', 
+    'DataTransfer',
+    'Element',
+    'Window',
+    'Node',
+    'HtmlDocument',
+    'HtmlSelectElement',
+    'HtmlInputElement',
+    'ScrollIntoViewOptions',
+    'ScrollBehavior',
+    'CssStyleDeclaration',
+    'TextMetrics',
+    'Performance',
+    'ResizeObserver',
+    'ResizeObserverEntry',
+    'HtmlOptionElement',
+    'console',
+    'BlobEvent', 
+    'Navigator',
+] }
