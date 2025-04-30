@@ -1,0 +1,15 @@
+[build]
+index = "examples/index.html"       
+html_output = "index.html"  
+release = false             
+public_url = "/"            
+filehash = true             
+inject_scripts = true   
+offline = false             
+frozen = false              
+locked = false              
+minify = "never"            
+no_sri = false   
+
+[serve]
+port = 8080
