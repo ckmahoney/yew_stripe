@@ -1,4 +1,4 @@
-//! client.rs
+//! yew_stripe/src/client.rs
 //!
 //! High-level Rust API for integrating Stripe.js Payment Element in Yew applications.
 //!
@@ -280,11 +280,7 @@ pub async fn confirm_payment(
 
 /// Tear down a mounted Payment Element so it can be re-mounted for a new payment.
 pub fn unmount_payment_element(pe: &JsPaymentElement) {
-    let unmount_fn = Reflect::get(pe.as_ref(), &"unmount".into())
-        .expect("PaymentElement missing unmount")
-        .dyn_into::<Function>()
-        .expect("unmount is not a function");
-    unmount_fn.call0(pe.as_ref()).expect("unmount failed");
+    pe.unmount().map_err(js_error_to_stripe_error)?;
 }
 
 /// Convert any JS exception or Promise rejection into `StripeError`.
