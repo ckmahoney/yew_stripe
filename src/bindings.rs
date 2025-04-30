@@ -1,4 +1,4 @@
-//! stripe_bindings.rs
+//! yew_stripe/src/bindings.rs
 //!
 //! Low‐level wasm‐bindgen bindings to Stripe.js v3 for use in Yew applications.
 //!
@@ -24,6 +24,10 @@
 //!    Validates collected data before intent creation.  
 //! 6. **`stripe.confirmPayment(opts)`**  
 //!    Confirms PaymentIntent, handling SCA/3DS flows automatically.  
+//! 7. **`paymentElement.unmount()`**  
+//!    Tears down the mounted element so it can be re-mounted later.  
+//! 8. **`stripe.handleCardAction(clientSecret)`** *(optional)*  
+//!    Manually trigger 3DS challenge handling for off-session flows.
 //!
 //! # Cargo.toml
 //! ```toml
@@ -46,9 +50,13 @@
 //! let pe_opts = JsValue::undefined();
 //! let payment_element: PaymentElement = elements.create("payment", pe_opts).unwrap();
 //! payment_element.mount("#payment-element").unwrap();
+//! // Later, to tear down:
+//! payment_element.unmount().unwrap();
+//! // For off-session 3DS handling:
+//! stripe.handle_card_action("pi_client_secret_...").unwrap();
 //! ```
 //!
-//! See higher-level wrappers in `stripe.rs` for async/await and error handling.
+//! See higher-level wrappers in `client.rs` for async/await and error handling.
 
 use wasm_bindgen::prelude::*;
 use web_sys::js_sys::Promise;
@@ -81,7 +89,7 @@ extern "C" {
     /// Global constructor: `Stripe(publishableKey)` → `Stripe` instance.
     ///
     /// # Arguments
-    /// * `publishable_key` – Your Stripe publishable API key (e.g. `"pk_test_…"`)  
+    /// * `publishable_key` – Your Stripe publishable API key (e.g. `"pk_test_…"`).  
     /// # Errors
     /// Throws if Stripe.js isn't loaded or key is invalid.
     #[wasm_bindgen(js_name = Stripe, js_namespace = window)]
@@ -119,6 +127,13 @@ extern "C" {
     #[wasm_bindgen(method, catch)]
     pub fn mount(this: &PaymentElement, selector: &str) -> Result<(), JsValue>;
 
+    /// Tears down a mounted `PaymentElement`.
+    ///
+    /// # Errors
+    /// Throws if the element is not mounted or on unmount failure.
+    #[wasm_bindgen(method, catch)]
+    pub fn unmount(this: &PaymentElement) -> Result<(), JsValue>;
+
     /// Validates all fields in an `Elements` form.
     ///
     /// Only used in two-step flows where you collect data
@@ -128,6 +143,15 @@ extern "C" {
     /// A JS `Promise` that resolves on success or rejects with an error.
     #[wasm_bindgen(method, catch)]
     pub fn submit(this: &Elements) -> Result<Promise, JsValue>;
+
+    /// Manually handle 3DS/SCA challenge for off-session PaymentIntents.
+    ///
+    /// # Arguments
+    /// * `client_secret` – The PaymentIntent client secret.
+    /// # Returns
+    /// A JS `Promise` that resolves when the challenge completes or rejects on error.
+    #[wasm_bindgen(method, catch, js_name = handleCardAction)]
+    pub fn handle_card_action(this: &Stripe, client_secret: &str) -> Result<Promise, JsValue>;
 
     /// Confirms a PaymentIntent using a `PaymentElement`.
     ///
