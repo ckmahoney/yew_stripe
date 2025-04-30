@@ -64,53 +64,46 @@ use web_sys::js_sys::Promise;
 #[wasm_bindgen]
 extern "C" {
     //------------------------------------------------------------------------------
-    // Types
+    // Core Types
     //------------------------------------------------------------------------------
 
-    /// The primary Stripe client. Created by calling the global `Stripe(publishableKey)`.
-    #[wasm_bindgen(js_name = Stripe)]
+    /// The primary Stripe client. Construct with `new_stripe(publishable_key)`.
+    #[wasm_bindgen(js_name = Stripe, js_namespace = window)]
     #[derive(Debug, Clone)]
     pub type Stripe;
 
-    /// The Elements factory, used to create UI components (e.g., PaymentElement).
+    /// Factory for creating UI components (PaymentElement, CardElement, etc.).
     #[wasm_bindgen]
     #[derive(Debug, Clone)]
     pub type Elements;
 
-    /// A prebuilt UI component for collecting payment details (card, UPI, wallets).
+    /// Prebuilt UI component for collecting payment details.
     #[wasm_bindgen]
     #[derive(Debug)]
     pub type PaymentElement;
 
     //------------------------------------------------------------------------------
-    // Functions & Methods
+    // Constructors & Methods
     //------------------------------------------------------------------------------
 
-    /// Global constructor: `Stripe(publishableKey)` → `Stripe` instance.
-    ///
-    /// # Arguments
-    /// * `publishable_key` – Your Stripe publishable API key (e.g. `"pk_test_…"`).  
-    /// # Errors
-    /// Throws if Stripe.js isn't loaded or key is invalid.
+    /// Create a new `Stripe` instance:
+    /// ```js
+    ///   const stripe = Stripe("pk_test_...");
+    /// ```
     #[wasm_bindgen(js_name = Stripe, js_namespace = window)]
     pub fn new_stripe(publishable_key: &str) -> Stripe;
 
-    /// Initializes an `Elements` instance linked to a PaymentIntent.
-    ///
-    /// # Arguments
-    /// * `options` – JS object, must include `clientSecret` (and optional `appearance`).
-    /// # Errors
-    /// Throws on invalid or missing `clientSecret`.
+    /// Initialize Elements linked to a PaymentIntent:
+    /// ```js
+    ///   const elements = stripe.elements({ clientSecret: "...", appearance: {...} });
+    /// ```
     #[wasm_bindgen(method, catch, js_name = elements)]
     pub fn elements(this: &Stripe, options: JsValue) -> Result<Elements, JsValue>;
 
-    /// Creates a UI component on an `Elements` instance.
-    ///
-    /// # Arguments
-    /// * `element_type` – e.g. `"payment"`, `"card"`.  
-    /// * `options` – JS object with component-specific settings (layout, fields).  
-    /// # Errors
-    /// Throws on unsupported element type or bad options.
+    /// Create a UI component on an `Elements` instance:
+    /// ```js
+    ///   const pe = elements.create("payment", { layout: "tabs" });
+    /// ```
     #[wasm_bindgen(method, catch, js_name = create)]
     pub fn create_element(
         this: &Elements,
@@ -118,53 +111,35 @@ extern "C" {
         options: JsValue,
     ) -> Result<PaymentElement, JsValue>;
 
-    /// Mounts a `PaymentElement` into the page.
-    ///
-    /// # Arguments
-    /// * `selector` – CSS selector or element ID (e.g. `"#payment-element"`).  
-    /// # Errors
-    /// Throws if the selector is not found or element already mounted.
+    /// Mount a mounted `PaymentElement` into the DOM:
+    /// ```js
+    ///   pe.mount("#payment-element");
+    /// ```
     #[wasm_bindgen(method, catch)]
     pub fn mount(this: &PaymentElement, selector: &str) -> Result<(), JsValue>;
 
-    /// Tears down a mounted `PaymentElement`.
-    ///
-    /// # Errors
-    /// Throws if the element is not mounted or on unmount failure.
+    /// Unmount a `PaymentElement` so it can be re-mounted:
     #[wasm_bindgen(method, catch)]
     pub fn unmount(this: &PaymentElement) -> Result<(), JsValue>;
 
-    /// Validates all fields in an `Elements` form.
-    ///
-    /// Only used in two-step flows where you collect data
-    /// before creating a PaymentIntent.
-    ///
-    /// # Returns
-    /// A JS `Promise` that resolves on success or rejects with an error.
+    /// Validate all fields in an `Elements` form:
+    /// ```js
+    ///   elements.submit().then(...);
+    /// ```
     #[wasm_bindgen(method, catch)]
     pub fn submit(this: &Elements) -> Result<Promise, JsValue>;
 
-    /// Manually handle 3DS/SCA challenge for off-session PaymentIntents.
-    ///
-    /// # Arguments
-    /// * `client_secret` – The PaymentIntent client secret.
-    /// # Returns
-    /// A JS `Promise` that resolves when the challenge completes or rejects on error.
+    /// Manually handle off-session SCA/3DS:
+    /// ```js
+    ///   stripe.handleCardAction(clientSecret).then(...);
+    /// ```
     #[wasm_bindgen(method, catch, js_name = handleCardAction)]
     pub fn handle_card_action(this: &Stripe, client_secret: &str) -> Result<Promise, JsValue>;
 
-    /// Confirms a PaymentIntent using a `PaymentElement`.
-    ///
-    /// # Arguments
-    /// * `options` – JS object.  
-    ///    - Either `{ elements, confirmParams, redirect }`  
-    ///    - Or `{ paymentElement, clientSecret, confirmParams, redirect }` for two-step flows.  
-    ///
-    /// * `confirmParams` keys: e.g. `return_url`.  
-    /// * `redirect`: `"if_required"` vs `"always"`.  
-    ///
-    /// # Returns
-    /// A JS `Promise` resolving to either a success result or an error object.
+    /// Confirm a PaymentIntent using a `PaymentElement` or `elements`:
+    /// ```js
+    ///   stripe.confirmPayment({ elements, confirmParams, redirect: "if_required" });
+    /// ```
     #[wasm_bindgen(method, catch, js_name = confirmPayment)]
     pub fn confirm_payment(this: &Stripe, options: JsValue) -> Result<Promise, JsValue>;
 }
