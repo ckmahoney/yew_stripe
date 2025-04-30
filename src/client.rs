@@ -1,14 +1,15 @@
-//! stripe.rs
+//! client.rs
 //!
 //! High-level Rust API for integrating Stripe.js Payment Element in Yew applications.
 //!
 //! This module provides:
 //! - `ElementsOptions` to configure Stripe Elements with a PaymentIntent client secret.
 //! - `PaymentElementOptions` to customize layout and fields of the Payment Element.
-//! - `ConfirmPaymentParams` for passing parameters to `stripe.confirmPayment`, such as return URLs.
+//! - `ConfirmPaymentParams` for passing parameters to `stripe.confirmPayment`, such as return URLs and save-card.
 //! - `mount_payment_element()` to asynchronously initialize Stripe, create Elements, and mount the Payment Element.
 //! - `validate_payment_element()` to optionally validate form data before creating a PaymentIntent.
-//! - `confirm_payment()` to complete the payment flow with built-in SCA/3DS support and optional save-card functionality.
+//! - `confirm_payment()` to complete the payment flow with built-in SCA/3DS support.
+//! - `unmount_payment_element()` to tear down a mounted Payment Element for re-use.
 //!
 //! # Cargo.toml
 //! ```toml
@@ -24,15 +25,18 @@
 //! # Example Usage
 //! ```rust,ignore
 //! use yew::prelude::*;
-//! use crate::stripe::{ElementsOptions, ConfirmPaymentParams, mount_payment_element, confirm_payment, PaymentResult};
-//! use crate::stripe_interop::use_stripejs;
+//! use crate::stripe::{
+//!     ElementsOptions, ConfirmPaymentParams,
+//!     mount_payment_element, confirm_payment, unmount_payment_element, PaymentResult
+//! };
+//! use crate::interop::use_stripejs;
 //!
 //! #[function_component(CheckoutForm)]
 //! fn checkout_form() -> Html {
 //!     let stripe_ready = use_stripejs();
-//!     let stripe_state = use_state(|| None::<(JsStripe, JsElements)>);
+//!     let stripe_state = use_state(|| None::<(JsStripe, JsElements, JsPaymentElement)>);
 //!
-//!     // Once Stripe.js is loaded, mount the Payment Element:
+//!     // Mount on load
 //!     {
 //!         let stripe_state = stripe_state.clone();
 //!         use_effect_with_deps(move |ready| {
@@ -40,8 +44,8 @@
 //!                 wasm_bindgen_futures::spawn_local(async move {
 //!                     let opts = ElementsOptions { client_secret: cs.clone(), appearance: None };
 //!                     match mount_payment_element(&pk, opts, "#payment-element", None).await {
-//!                         Ok((s, e, _)) => stripe_state.set(Some((s, e))),
-//!                         Err(err)      => log::error!("Init failed: {}", err.message),
+//!                         Ok((s, e, pe)) => stripe_state.set(Some((s, e, pe))),
+//!                         Err(err)       => log::error!("Init failed: {}", err.message),
 //!                     }
 //!                 });
 //!             }
@@ -49,16 +53,25 @@
 //!         }, stripe_ready);
 //!     }
 //!
-//!     // On form submit, confirm the payment:
+//!     // On submit
 //!     let onsubmit = {
 //!         let stripe_state = stripe_state.clone();
 //!         Callback::from(move |e: FocusEvent| {
 //!             e.prevent_default();
-//!             if let Some((s, e)) = &*stripe_state {
+//!             if let Some((s, e, pe)) = &*stripe_state {
 //!                 let s = s.clone();
 //!                 let e = e.clone();
+//!                 let pe = pe.clone();
 //!                 wasm_bindgen_futures::spawn_local(async move {
-//!                     let params = ConfirmPaymentParams { return_url: Some("https://…".into()), extra: None };
+//!                     // Tear down after a previous payment (if needed)
+//!                     unmount_payment_element(&pe);
+//!
+//!                     // Confirm new payment with save_card = true
+//!                     let params = ConfirmPaymentParams {
+//!                         return_url: Some("https://…".into()),
+//!                         save_payment_method: Some(true),
+//!                         extra: None,
+//!                     };
 //!                     match confirm_payment(&s, &e, params, None, true).await {
 //!                         PaymentResult::Success(info) => log::info!("Paid: {:?}", info),
 //!                         PaymentResult::Error(err)    => log::error!("Error: {}", err.message),
@@ -77,13 +90,13 @@
 //! }
 //! ```
 
-use wasm_bindgen::JsValue;
+use wasm_bindgen::{JsValue, JsCast};
 use wasm_bindgen_futures::JsFuture;
-use web_sys::js_sys::{Object, Reflect};
+use web_sys::js_sys::{Object, Reflect, Function};
 use serde_wasm_bindgen::{to_value, from_value};
 use serde::{Serialize, Deserialize};
 use serde_json::Value as JsonValue;
-use crate::stripe_bindings::{
+use crate::bindings::{
     new_stripe, Stripe as JsStripe, Elements as JsElements, PaymentElement as JsPaymentElement,
 };
 
@@ -117,6 +130,10 @@ pub struct ConfirmPaymentParams {
     /// Where to redirect on success (only for redirect-based flows).
     #[serde(rename = "return_url", skip_serializing_if = "Option::is_none")]
     pub return_url: Option<String>,
+
+    /// Whether to save the payment method for future off-session use.
+    #[serde(rename = "save_payment_method", skip_serializing_if = "Option::is_none")]
+    pub save_payment_method: Option<bool>,
 
     /// Additional confirm params (e.g. shipping, payment_method_data).
     #[serde(flatten)]
@@ -170,26 +187,20 @@ pub async fn mount_payment_element(
     mount_id: &str,
     pe_options: Option<PaymentElementOptions>,
 ) -> Result<(JsStripe, JsElements, JsPaymentElement), StripeError> {
-    // 1) Create the Stripe instance
     let stripe = new_stripe(publishable_key);
 
-    // 2) Serialize ElementsOptions → JsValue
     let opts_js = to_value(&elements_options)
         .map_err(|e| StripeError { message: e.to_string(), error_type: None, code: None })?;
-    // 3) Initialize Elements
     let elements = stripe
         .elements(opts_js)
         .map_err(js_error_to_stripe_error)?;
 
-    // 4) Serialize PaymentElementOptions or use undefined
     let pe_js = pe_options
         .map(|opt| to_value(&opt).expect("PaymentElementOptions serialization failed"))
         .unwrap_or(JsValue::undefined());
-    // 5) Create PaymentElement
     let payment_el = elements
         .create_element("payment", pe_js)
         .map_err(js_error_to_stripe_error)?;
-    // 6) Mount to DOM
     payment_el
         .mount(mount_id)
         .map_err(js_error_to_stripe_error)?;
@@ -199,9 +210,6 @@ pub async fn mount_payment_element(
 
 /// Optionally validate the Payment Element form before creating an intent.
 /// Required only if Elements was initialized without a client secret.
-///
-/// # Returns
-/// `Ok(())` if validation passed, or a `StripeError`.
 pub async fn validate_payment_element(
     elements: &JsElements,
 ) -> Result<(), StripeError> {
@@ -219,7 +227,7 @@ pub async fn validate_payment_element(
 /// # Arguments
 /// - `stripe`: Stripe instance from `mount_payment_element`.
 /// - `elements`: Elements instance from `mount_payment_element`.
-/// - `params`: `ConfirmPaymentParams` (e.g. `return_url`).
+/// - `params`: `ConfirmPaymentParams` (e.g. `return_url`, `save_payment_method`).
 /// - `client_secret`: `Some(...)` for two‐step flow, `None` for one‐step.
 /// - `redirect_if_required`: `true` for `"if_required"` behavior.
 ///
@@ -232,7 +240,6 @@ pub async fn confirm_payment(
     client_secret: Option<String>,
     redirect_if_required: bool,
 ) -> PaymentResult {
-    // Build the options object
     let opts = Object::new();
     if let Some(cs) = client_secret {
         Reflect::set(&opts, &"paymentElement".into(), elements.as_ref()).unwrap();
@@ -240,28 +247,22 @@ pub async fn confirm_payment(
     } else {
         Reflect::set(&opts, &"elements".into(), elements.as_ref()).unwrap();
     }
-    // Attach confirmParams
     let cp_js = to_value(&params).expect("ConfirmPaymentParams serialization failed");
     Reflect::set(&opts, &"confirmParams".into(), &cp_js).unwrap();
-    // Attach redirect behavior
     if redirect_if_required {
         Reflect::set(&opts, &"redirect".into(), &"if_required".into()).unwrap();
     }
 
-    // Call stripe.confirmPayment(...)
     let promise = match stripe.confirm_payment(opts.into()) {
         Ok(p) => p,
         Err(e) => return PaymentResult::Error(js_error_to_stripe_error(e)),
     };
 
-    // Await result
     match JsFuture::from(promise).await {
         Ok(js_val) => {
-            // Attempt to deserialize an error object
             if let Ok(err) = from_value::<StripeError>(js_val.clone()) {
                 return PaymentResult::Error(err);
             }
-            // Otherwise extract PaymentIntent info
             let pi = Reflect::get(&js_val, &"paymentIntent".into())
                 .ok()
                 .and_then(|v| Reflect::get(&v, &"id".into()).ok())
@@ -277,9 +278,17 @@ pub async fn confirm_payment(
     }
 }
 
+/// Tear down a mounted Payment Element so it can be re-mounted for a new payment.
+pub fn unmount_payment_element(pe: &JsPaymentElement) {
+    let unmount_fn = Reflect::get(pe.as_ref(), &"unmount".into())
+        .expect("PaymentElement missing unmount")
+        .dyn_into::<Function>()
+        .expect("unmount is not a function");
+    unmount_fn.call0(pe.as_ref()).expect("unmount failed");
+}
+
 /// Convert any JS exception or Promise rejection into `StripeError`.
 fn js_error_to_stripe_error(js_val: JsValue) -> StripeError {
-    // Try structured error first
     if let Ok(err) = from_value::<StripeError>(js_val.clone()) {
         err
     } else {
