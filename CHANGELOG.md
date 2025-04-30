@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.1] – 2025-04-30
+### Added
+- `StripeClient` struct to encapsulate your publishable key and avoid passing it on every call.
+- `handle_card_action()` helper for manual off-session SCA/3DS flows.
+- `serde_error_to_stripe_error()` to convert serialization errors into `StripeError`.
+
+
 ## [0.2.0] – 2025-04-30
 ### Added
 - `unmount_payment_element()` to support repeated payments in the same session.
