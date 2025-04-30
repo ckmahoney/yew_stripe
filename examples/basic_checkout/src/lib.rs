@@ -37,7 +37,14 @@ fn basic_checkout() -> Html {
         use_effect_with(stripe_ready, move |ready| {
             if *ready {
                 spawn_local(async move {
-                    let pk = "pk_test_XXXXXXXXXXXXXXXX";
+                    // This is my publishable key. You can always share a publishable key.
+                    let pk = "pk_test_51KUI60DEw04PTNScWne4kC3RDrpxnydTfgx0B4b4EsBJajLDmqT2t79nEj8kZjeMGx2bfI9BZN1zqo2NX6HrGp4u00Rv0S1OYT";
+
+                    // This is a restricted key on my personal acount. 
+                    // It supports { PaymentIntents: write, PaymentMethods: read, SetupIntents: write }
+                    // With no guarantee it will work at the time you find it. 
+                    // Please visit stripe dashboard to create your own test key if you need customization!
+                    let sk = "rk_test_51KUI60DEw04PTNSc0SBuAbmzGTJyeNlLdF4SuQSSlPsyJdte4MucNkKDPloXtpxEThI671A5Ty8jJ0r0TgXw7PYO006rfcLrc1";
                     let cs = "pi_client_secret_XXXXXXXXXXXXXXXX";
                     let opts = ElementsOptions {
                         client_secret: cs.into(),
