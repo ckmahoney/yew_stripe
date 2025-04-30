@@ -90,9 +90,9 @@
 //! }
 //! ```
 
-use wasm_bindgen::{JsValue, JsCast};
+use wasm_bindgen::{JsValue};
 use wasm_bindgen_futures::JsFuture;
-use web_sys::js_sys::{Object, Reflect, Function};
+use web_sys::js_sys::{Object, Reflect};
 use serde_wasm_bindgen::{to_value, from_value};
 use serde::{Serialize, Deserialize};
 use serde_json::Value as JsonValue;
@@ -279,10 +279,12 @@ pub async fn confirm_payment(
 }
 
 /// Tear down a mounted Payment Element so it can be re-mounted for a new payment.
-pub fn unmount_payment_element(pe: &JsPaymentElement) {
-    pe.unmount().map_err(js_error_to_stripe_error)?;
+///
+/// # Errors
+/// Returns `Err(StripeError)` if unmount fails.
+pub fn unmount_payment_element(pe: &JsPaymentElement) -> Result<(), StripeError> {
+    pe.unmount().map_err(js_error_to_stripe_error)
 }
-
 /// Convert any JS exception or Promise rejection into `StripeError`.
 fn js_error_to_stripe_error(js_val: JsValue) -> StripeError {
     if let Ok(err) = from_value::<StripeError>(js_val.clone()) {
