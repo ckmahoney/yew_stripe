@@ -98,13 +98,13 @@ use serde::{Serialize, Deserialize};
 use serde_wasm_bindgen::{to_value, from_value};
 use crate::bindings::{
     new_stripe,
-    Stripe as JsStripe,
-    Elements as JsElements,
-    PaymentElement as JsPaymentElement,
+    JsStripe,
+    JsElements,
+    JsPaymentElement,
 };
 
 /// Configuration for `stripe.elements({ clientSecret, appearance })`.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct ElementsOptions {
     /// The PaymentIntent client secret returned by your backend.
     #[serde(rename = "clientSecret")]
@@ -116,7 +116,7 @@ pub struct ElementsOptions {
 }
 
 /// Optional layout/customization for the mounted Payment Element.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct PaymentElementOptions {
     /// Layout mode: `"tabs"` or `"accordion"`.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -128,7 +128,7 @@ pub struct PaymentElementOptions {
 }
 
 /// Parameters for `stripe.confirmPayment({ confirmParams, ... })`.
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 pub struct ConfirmPaymentParams {
     /// For redirect-based flows: where to send the customer on success.
     #[serde(rename = "return_url", skip_serializing_if = "Option::is_none")]
@@ -144,7 +144,7 @@ pub struct ConfirmPaymentParams {
 }
 
 /// Minimal representation of a confirmed PaymentIntent.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PaymentIntentInfo {
     /// Stripe’s internal identifier, e.g. `pi_1Fxxxxxx`.
     pub id: String,
@@ -153,7 +153,7 @@ pub struct PaymentIntentInfo {
 }
 
 /// Strongly-typed outcome of attempting to confirm a payment.
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum PaymentResult {
     /// The PaymentIntent succeeded. Contains basic info.
     Success(PaymentIntentInfo),
@@ -162,7 +162,7 @@ pub enum PaymentResult {
 }
 
 /// Representation of a Stripe.js error object.
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct StripeError {
     /// Human-readable message.
     pub message: String,
@@ -351,4 +351,177 @@ fn serde_error_to_stripe_error(err: serde_wasm_bindgen::Error) -> StripeError {
         error_type: None,
         code: None,
     }
+}
+
+
+/// A high-level client holding your Stripe instance for the life of your component.
+#[derive(Clone, Debug)]
+pub struct StripeClient {
+    inner: JsStripe,
+}
+
+impl StripeClient {
+    /// Create a new Stripe client.
+    ///
+    /// # Arguments
+    ///
+    /// * `publishable_key` – Your Stripe publishable key (starts with `pk_`).
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let stripe = StripeClient::new("pk_test_...");
+    /// ```
+    pub fn new(publishable_key: &str) -> Self {
+        // Internally calls the low-level wasm-bindgen `new_stripe` binding.
+        Self {
+            inner: new_stripe(publishable_key),
+        }
+    }
+
+    /// Mount a Payment Element into the DOM.
+    ///
+    /// This does:
+    /// 1. `stripe.elements({ clientSecret, appearance })`
+    /// 2. `elements.create("payment", pe_options)`
+    /// 3. `paymentElement.mount(mount_id)`
+    ///
+    /// # Arguments
+    ///
+    /// * `opts` – Configuration including the PaymentIntent client secret.
+    /// * `mount_id` – CSS selector or element ID (e.g. `"#payment-element"`).
+    /// * `pe_opts` – Optional layout/customization for the Payment Element.
+    ///
+    /// # Returns
+    ///
+    /// On success, returns `(JsElements, JsPaymentElement)`. On failure, returns `StripeError`.
+    ///
+    /// # Errors
+    ///
+    /// - Missing or invalid client secret → StripeError
+    /// - DOM selector not found → StripeError
+    pub async fn mount_element(
+        &self,
+        opts: ElementsOptions,
+        mount_id: &str,
+        pe_opts: Option<PaymentElementOptions>,
+    ) -> Result<(JsElements, JsPaymentElement), StripeError> {
+        // Serialize Rust options into JsValue
+        let js_opts = to_value(&opts)
+            .map_err(serde_error_to_stripe_error)?;
+        // Initialize Elements
+        let elements = self
+            .inner
+            .elements(js_opts)
+            .map_err(js_to_stripe_error)?;
+
+        // Build and mount the Payment Element
+        let pe_js = pe_opts
+            .map(|o| to_value(&o).unwrap())
+            .unwrap_or(JsValue::undefined());
+
+        let payment_el = elements
+            .create_element("payment", pe_js)
+            .map_err(js_to_stripe_error)?;
+        payment_el
+            .mount(mount_id)
+            .map_err(js_to_stripe_error)?;
+
+            
+        Ok((elements, payment_el))
+    }
+
+    /// Optionally validate the mounted Payment Element’s fields before intent creation.
+    ///
+    /// Only necessary if you initialized Elements *without* a `clientSecret`.
+    ///
+    /// # Arguments
+    ///
+    /// * `elements` – The `JsElements` returned from `mount_element`.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` if validation passed; otherwise `Err(StripeError)`.
+    pub async fn validate_element(
+        &self,
+        elements: &JsElements,
+    ) -> Result<(), StripeError> {
+        let promise = elements.submit()
+            .map_err(js_to_stripe_error)?;
+        JsFuture::from(promise)
+            .await
+            .map(|_| ())
+            .map_err(js_to_stripe_error)
+    }
+
+
+    /// Confirm the PaymentIntent, handling SCA/3DS automatically.
+    ///
+    /// # Arguments
+    ///
+    /// * `elements` – The `JsElements` from `mount_element`.
+    /// * `params` – Redirect URLs, save-card flags, etc.
+    /// * `client_secret` – `Some(...)` for two-step flows; `None` if you passed `clientSecret` earlier.
+    /// * `redirect_if_required` – `true` to use `"if_required"` redirect behavior.
+    ///
+    /// # Returns
+    ///
+    /// A `PaymentResult` indicating success or error.
+    pub async fn confirm(
+        &self,
+        elements: &JsElements,
+        params: ConfirmPaymentParams,
+        client_secret: Option<String>,
+        redirect_if_required: bool,
+    ) -> PaymentResult {
+        // call the free function in this module directly
+        confirm_payment(
+            &self.inner,
+            elements,
+            params,
+            client_secret,
+            redirect_if_required,
+        )
+        .await
+    }
+
+
+    /// Tear down a mounted Payment Element so it can be re-mounted for another payment.
+    ///
+    /// # Arguments
+    ///
+    /// * `payment_element` – The `JsPaymentElement` to unmount.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` on success, or `Err(StripeError)` if unmount fails.
+    pub fn unmount_element(
+        &self,
+        payment_element: &JsPaymentElement,
+    ) -> Result<(), StripeError> {
+        payment_element.unmount()
+            .map_err(js_to_stripe_error)
+    }
+
+
+    /// Manually trigger an off-session 3DS/SCA challenge.
+    ///
+    /// # Arguments
+    ///
+    /// * `client_secret` – The PaymentIntent’s client secret for off-session flows.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` when the user completes the challenge, or `Err(StripeError)` on failure.
+    pub async fn handle_card_action(&self, client_secret: &str) -> Result<(), StripeError> {
+        let promise = self
+            .inner
+            .handle_card_action(client_secret)
+            .map_err(js_to_stripe_error)?;
+        JsFuture::from(promise)
+            .await
+            .map(|_| ())
+            .map_err(js_to_stripe_error)
+    }
+
 }

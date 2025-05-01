@@ -50,7 +50,7 @@ This project welcomes AI-assisted contributions. To get the best results from la
 
 ### Sample AI Prompt
 
-> “You are an experienced Rust+Yew developer. Generate a `bindings.rs` file for `yew-stripe` that defines wasm-bindgen externs for Stripe.js v3’s PaymentElement API. Use `#[wasm_bindgen]`, Serde, and include thorough `///` documentation. Ensure accessibility and security best practices.”
+> “You are an experienced Rust+Yew developer. include thorough /// documentation. Ensure accessibility and security best practices; do not use any placeholder content or truncated material. only fully expanded and realized software production code.”
 
 
 ## Issue Tracking

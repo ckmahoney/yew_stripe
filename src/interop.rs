@@ -36,7 +36,7 @@
 //! ```
 
 use yew::prelude::*;
-use yew::functional::hook; // required for custom hooks marked #[hook]
+use yew::functional::hook; 
 use wasm_bindgen::{prelude::Closure, JsCast, JsValue};
 use web_sys::js_sys::Reflect;
 use web_sys::HtmlScriptElement;
@@ -55,17 +55,16 @@ pub fn use_stripejs() -> bool {
     let loaded = use_state(|| {
         web_sys::window()
             .and_then(|win| {
-                // Reflect.has(window, "Stripe") → Result<bool, _>
                 Reflect::has(&win, &JsValue::from_str("Stripe"))
-                    .ok()             // Result<bool, _> → Option<bool>
+                    .ok()             
                     .filter(|&b| b)  // keep only `true`
             })
-            .map(|_| true)         // Some(true) → Some(true)
-            .unwrap_or(false)      // None → false
+            .map(|_| true)         
+            .unwrap_or(false)      
     });
 
     {
-        let loaded = loaded.clone(); // UseStateHandle<bool> is Clone + Deref&#8203;:contentReference[oaicite:6]{index=6}
+        let loaded = loaded.clone();
         use_effect(move || {
             // If not yet loaded, inject the Stripe.js script once
             if !*loaded {
@@ -89,7 +88,7 @@ pub fn use_stripejs() -> bool {
                     // Closure to run on script.load → set loaded = true
                     let onload_closure = Closure::wrap(Box::new(move || {
                         loaded.set(true);
-                    }) as Box<dyn Fn()>); // Closure needs 'static Fn()&#8203;:contentReference[oaicite:7]{index=7}
+                    }) as Box<dyn Fn()>);
 
                     script.set_onload(Some(onload_closure.as_ref().unchecked_ref()));
                     onload_closure.forget(); // Leak so it lives until load event
@@ -106,6 +105,5 @@ pub fn use_stripejs() -> bool {
         });
     }
 
-    // Return the current loaded state (derefs UseStateHandle<bool>)&#8203;:contentReference[oaicite:8]{index=8}
     *loaded
 }

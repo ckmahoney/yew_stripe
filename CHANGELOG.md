@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.2] – 2025-05-01
+### Fixed
+- Standardized wasm-bindgen bindings in `stripe_bindings.rs`: prefixed raw types with `Js` (e.g. `JsStripe`, `JsElements`, `JsPaymentElement`) and enforced consistent `js_name` and `catch` annotations.
+
 ## [0.2.1] – 2025-04-30
 ### Added
 - `StripeClient` struct to encapsulate your publishable key and avoid passing it on every call.
