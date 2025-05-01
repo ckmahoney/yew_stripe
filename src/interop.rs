@@ -35,11 +35,11 @@
 //! }
 //! ```
 
-use yew::prelude::*;
-use yew::functional::hook; 
 use wasm_bindgen::{prelude::Closure, JsCast, JsValue};
 use web_sys::js_sys::Reflect;
 use web_sys::HtmlScriptElement;
+use yew::functional::hook;
+use yew::prelude::*;
 
 /// Custom hook: load Stripe.js v3 exactly once and track readiness.
 ///
@@ -56,11 +56,11 @@ pub fn use_stripejs() -> bool {
         web_sys::window()
             .and_then(|win| {
                 Reflect::has(&win, &JsValue::from_str("Stripe"))
-                    .ok()             
-                    .filter(|&b| b)  // keep only `true`
+                    .ok()
+                    .filter(|&b| b) // keep only `true`
             })
-            .map(|_| true)         
-            .unwrap_or(false)      
+            .map(|_| true)
+            .unwrap_or(false)
     });
 
     {

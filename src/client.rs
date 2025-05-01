@@ -90,18 +90,12 @@
 //! }
 //! ```
 
-
+use crate::bindings::{new_stripe, JsElements, JsPaymentElement, JsStripe};
+use serde::{Deserialize, Serialize};
+use serde_wasm_bindgen::{from_value, to_value};
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::js_sys::{Object, Reflect};
-use serde::{Serialize, Deserialize};
-use serde_wasm_bindgen::{to_value, from_value};
-use crate::bindings::{
-    new_stripe,
-    JsStripe,
-    JsElements,
-    JsPaymentElement,
-};
 
 /// Configuration for `stripe.elements({ clientSecret, appearance })`.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -135,7 +129,10 @@ pub struct ConfirmPaymentParams {
     pub return_url: Option<String>,
 
     /// Whether to save the payment method for off-session use.
-    #[serde(rename = "save_payment_method", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "save_payment_method",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub save_payment_method: Option<bool>,
 
     /// Any additional confirm params (e.g. shipping info).
@@ -198,11 +195,8 @@ pub async fn mount_payment_element(
     let stripe = new_stripe(publishable_key);
 
     // 2) Build JS args for elements()
-    let opts_js = to_value(&elements_options)
-        .map_err(serde_error_to_stripe_error)?;
-    let elements = stripe
-        .elements(opts_js)
-        .map_err(js_to_stripe_error)?;
+    let opts_js = to_value(&elements_options).map_err(serde_error_to_stripe_error)?;
+    let elements = stripe.elements(opts_js).map_err(js_to_stripe_error)?;
 
     // 3) Build JS args for create("payment", ...)
     let pe_opts_js = pe_options
@@ -227,12 +221,8 @@ pub async fn mount_payment_element(
 ///
 /// Returns `Err(StripeError)` if validation fails or JS throws.
 ///
-pub async fn validate_payment_element(
-    elements: &JsElements,
-) -> Result<(), StripeError> {
-    let promise = elements
-        .submit()
-        .map_err(js_to_stripe_error)?;
+pub async fn validate_payment_element(elements: &JsElements) -> Result<(), StripeError> {
+    let promise = elements.submit().map_err(js_to_stripe_error)?;
     JsFuture::from(promise)
         .await
         .map(|_| ())
@@ -259,15 +249,30 @@ pub async fn confirm_payment(
     // Build the JS options object dynamically
     let opts = Object::new();
     if let Some(cs) = client_secret {
-        Reflect::set(&opts, &JsValue::from_str("paymentElement"), elements.as_ref()).unwrap();
-        Reflect::set(&opts, &JsValue::from_str("clientSecret"), &JsValue::from_str(&cs)).unwrap();
+        Reflect::set(
+            &opts,
+            &JsValue::from_str("paymentElement"),
+            elements.as_ref(),
+        )
+        .unwrap();
+        Reflect::set(
+            &opts,
+            &JsValue::from_str("clientSecret"),
+            &JsValue::from_str(&cs),
+        )
+        .unwrap();
     } else {
         Reflect::set(&opts, &JsValue::from_str("elements"), elements.as_ref()).unwrap();
     }
     let params_js = to_value(&params).expect("ConfirmPaymentParams serialization failed");
     Reflect::set(&opts, &JsValue::from_str("confirmParams"), &params_js).unwrap();
     if redirect_if_required {
-        Reflect::set(&opts, &JsValue::from_str("redirect"), &JsValue::from_str("if_required")).unwrap();
+        Reflect::set(
+            &opts,
+            &JsValue::from_str("redirect"),
+            &JsValue::from_str("if_required"),
+        )
+        .unwrap();
     }
 
     // Call stripe.confirmPayment(...)
@@ -305,9 +310,7 @@ pub async fn confirm_payment(
 ///
 /// Returns `Err(StripeError)` if unmount fails.
 ///
-pub fn unmount_payment_element(
-    payment_element: &JsPaymentElement
-) -> Result<(), StripeError> {
+pub fn unmount_payment_element(payment_element: &JsPaymentElement) -> Result<(), StripeError> {
     payment_element.unmount().map_err(js_to_stripe_error)
 }
 
@@ -322,10 +325,7 @@ pub fn unmount_payment_element(
 ///
 /// Returns `Err(StripeError)` if Stripe.js rejects.
 ///
-pub async fn handle_card_action(
-    stripe: &JsStripe,
-    client_secret: &str
-) -> Result<(), StripeError> {
+pub async fn handle_card_action(stripe: &JsStripe, client_secret: &str) -> Result<(), StripeError> {
     let promise = stripe
         .handle_card_action(client_secret)
         .map_err(js_to_stripe_error)?;
@@ -352,7 +352,6 @@ fn serde_error_to_stripe_error(err: serde_wasm_bindgen::Error) -> StripeError {
         code: None,
     }
 }
-
 
 /// A high-level client holding your Stripe instance for the life of your component.
 #[derive(Clone, Debug)]
@@ -407,13 +406,9 @@ impl StripeClient {
         pe_opts: Option<PaymentElementOptions>,
     ) -> Result<(JsElements, JsPaymentElement), StripeError> {
         // Serialize Rust options into JsValue
-        let js_opts = to_value(&opts)
-            .map_err(serde_error_to_stripe_error)?;
+        let js_opts = to_value(&opts).map_err(serde_error_to_stripe_error)?;
         // Initialize Elements
-        let elements = self
-            .inner
-            .elements(js_opts)
-            .map_err(js_to_stripe_error)?;
+        let elements = self.inner.elements(js_opts).map_err(js_to_stripe_error)?;
 
         // Build and mount the Payment Element
         let pe_js = pe_opts
@@ -423,11 +418,8 @@ impl StripeClient {
         let payment_el = elements
             .create_element("payment", pe_js)
             .map_err(js_to_stripe_error)?;
-        payment_el
-            .mount(mount_id)
-            .map_err(js_to_stripe_error)?;
+        payment_el.mount(mount_id).map_err(js_to_stripe_error)?;
 
-            
         Ok((elements, payment_el))
     }
 
@@ -442,18 +434,13 @@ impl StripeClient {
     /// # Returns
     ///
     /// `Ok(())` if validation passed; otherwise `Err(StripeError)`.
-    pub async fn validate_element(
-        &self,
-        elements: &JsElements,
-    ) -> Result<(), StripeError> {
-        let promise = elements.submit()
-            .map_err(js_to_stripe_error)?;
+    pub async fn validate_element(&self, elements: &JsElements) -> Result<(), StripeError> {
+        let promise = elements.submit().map_err(js_to_stripe_error)?;
         JsFuture::from(promise)
             .await
             .map(|_| ())
             .map_err(js_to_stripe_error)
     }
-
 
     /// Confirm the PaymentIntent, handling SCA/3DS automatically.
     ///
@@ -485,7 +472,6 @@ impl StripeClient {
         .await
     }
 
-
     /// Tear down a mounted Payment Element so it can be re-mounted for another payment.
     ///
     /// # Arguments
@@ -495,14 +481,9 @@ impl StripeClient {
     /// # Returns
     ///
     /// `Ok(())` on success, or `Err(StripeError)` if unmount fails.
-    pub fn unmount_element(
-        &self,
-        payment_element: &JsPaymentElement,
-    ) -> Result<(), StripeError> {
-        payment_element.unmount()
-            .map_err(js_to_stripe_error)
+    pub fn unmount_element(&self, payment_element: &JsPaymentElement) -> Result<(), StripeError> {
+        payment_element.unmount().map_err(js_to_stripe_error)
     }
-
 
     /// Manually trigger an off-session 3DS/SCA challenge.
     ///
@@ -523,5 +504,4 @@ impl StripeClient {
             .map(|_| ())
             .map_err(js_to_stripe_error)
     }
-
 }
