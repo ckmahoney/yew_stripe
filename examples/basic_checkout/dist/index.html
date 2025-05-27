@@ -8,8 +8,8 @@
     <!-- <link data-trunk rel="scss" href="src/style/index.scss"> -->
     
 <script type="module">
-import init, * as bindings from '/basic_checkout-ffcd2d54ce0941de.js';
-const wasm = await init({ module_or_path: '/basic_checkout-ffcd2d54ce0941de_bg.wasm' });
+import init, * as bindings from '/basic_checkout-7178e461a917cb3.js';
+const wasm = await init({ module_or_path: '/basic_checkout-7178e461a917cb3_bg.wasm' });
 
 
 window.wasmBindings = bindings;
@@ -18,7 +18,7 @@ window.wasmBindings = bindings;
 dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
 
 </script>
-<link rel="modulepreload" href="/basic_checkout-ffcd2d54ce0941de.js" crossorigin="anonymous" integrity="sha384-4nGnDqPIhrmczEo3sy/iLXsDtCYuE4wsAnMi6UltSDjZND9Qxr+49F/a2wNjRCKu"><link rel="preload" href="/basic_checkout-ffcd2d54ce0941de_bg.wasm" crossorigin="anonymous" integrity="sha384-cDxL9a55UpDp86n8XZA6Ugb4bx4b2wVtEu5V+jU25/Ptgiz9MjtCsJsT+mrxBzBT" as="fetch" type="application/wasm"></head>
+<link rel="modulepreload" href="/basic_checkout-7178e461a917cb3.js" crossorigin="anonymous" integrity="sha384-+ZTAPVUTrHfuzFJFtoYnTZQdFsEEkyy2/XzjyTJTSQ8aC2gKltJmRXdzzcBnhiwZ"><link rel="preload" href="/basic_checkout-7178e461a917cb3_bg.wasm" crossorigin="anonymous" integrity="sha384-IvruYnZu4ZpXGsjLG8VzfyY1/BaFuj2uJ0NukLPEr5UgSE/mGndUjFROAqLxG3GN" as="fetch" type="application/wasm"></head>
 <body>
     <div id="app"></div>
 <script>"use strict";
