@@ -41,15 +41,36 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         match (request.method(), request.url()) {
             // Create Payment Intent
             (&Method::Post, "/create-payment-intent") => {
+                // Read JSON body to get the "amount"
+                let mut body = String::new();
+                request.as_reader().read_to_string(&mut body)?;
+                let amount: u32 = match serde_json::from_str::<serde_json::Value>(&body)
+                    .ok()
+                    .and_then(|v| v.get("amount").and_then(|a| a.as_u64()))
+                {
+                    Some(v) => v as u32,
+                    None => {
+                        let mut resp = Response::from_string("Invalid request: amount required").with_status_code(400);
+                        for h in cors_headers() {
+                            resp.add_header(h);
+                        }
+                        request.respond(resp)?;
+                        return Ok(());
+                    }
+                };
+            
                 let client = reqwest::blocking::Client::new();
                 let stripe_res = client
                     .post("https://api.stripe.com/v1/payment_intents")
                     .basic_auth(&secret_key, Some(""))
-                    .form(&[("amount", "1000"), ("currency", "usd")])
+                    .form(&[
+                        ("amount", amount.to_string()),
+                        ("currency", "usd".to_string()),
+                    ])
                     .send()?
                     .error_for_status()?
                     .json::<StripePI>()?;
-
+            
                 let body = json!({ "client_secret": stripe_res.client_secret }).to_string();
                 let mut resp = Response::from_string(body)
                     .with_header(Header::from_bytes("Content-Type", "application/json").unwrap());
@@ -58,7 +79,8 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 }
                 request.respond(resp)?;
             }
-
+            
+            
             // Webhook endpoint
             (&Method::Post, "/webhook") => {
                 let mut body = String::new();
