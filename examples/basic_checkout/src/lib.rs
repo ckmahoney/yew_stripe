@@ -69,7 +69,7 @@ fn app() -> Html {
         AppView::ProductList => {
             html! {
                 <div class="min-h-screen bg-gradient-to-b from-slate-50 to-slate-200 flex flex-col items-center py-10">
-                    <h1 class="text-4xl font-extrabold mb-8 text-gray-800 drop-shadow-sm tracking-tight">{"Mock Store"}</h1>
+                    <h1 class="text-4xl font-extrabold mb-8 text-gray-800 drop-shadow-sm tracking-tight">{"Yew Shop"}</h1>
                     <h2 class="text-5xl font-extrabold mb-8 text-gray-800 drop-shadow-sm tracking-tight">{"Powered by Stripe"}</h2>
                     <p class="mb-8 text-gray-500 text-lg font-medium">{"Select a product to check out securely."}</p>
                     <div class="w-full max-w-2xl grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -110,7 +110,6 @@ struct CheckoutPageProps {
     product: Product,
     on_back: Callback<()>,
 }
-
 
 #[function_component(CheckoutPage)]
 fn checkout_page(props: &CheckoutPageProps) -> Html {
@@ -229,7 +228,8 @@ fn checkout_page(props: &CheckoutPageProps) -> Html {
                                 .unchecked_into();
                             let result = JsFuture::from(promise).await.unwrap();
                             let pi_js =
-                                js_sys::Reflect::get(&result, &JsValue::from_str("paymentIntent")).unwrap();
+                                js_sys::Reflect::get(&result, &JsValue::from_str("paymentIntent"))
+                                    .unwrap();
                             let pi_json: serde_json::Value = pi_js.into_serde().unwrap_or_default();
 
                             // --- Read expanded card data and receipt ---
@@ -267,7 +267,8 @@ fn checkout_page(props: &CheckoutPageProps) -> Html {
                                 .unwrap_or(0);
                             let amount = amt_cents as f64 / 100.0;
                             let (last4, brand, receipt_url) = {
-                                let charges = pi_json.get("charges")
+                                let charges = pi_json
+                                    .get("charges")
                                     .and_then(|c| c.get("data"))
                                     .and_then(|d| d.as_array());
                                 let first = charges.and_then(|arr| arr.get(0));
@@ -307,79 +308,211 @@ fn checkout_page(props: &CheckoutPageProps) -> Html {
         let on_back = props.on_back.clone();
         Callback::from(move |_| on_back.emit(()))
     };
-
     html! {
-        <div class="min-h-screen bg-slate-50 flex flex-col items-center pt-12 px-2">
-            <div class="w-full max-w-md bg-white rounded-2xl shadow-md p-8 flex flex-col">
-                <button onclick={on_back}
-                        class="mb-4 text-blue-500 hover:text-blue-700 font-medium text-sm text-left"
-                        aria-label="Back to product list">
-                    {"← Back"}
-                </button>
-                <h2 class="text-2xl font-bold mb-1 text-gray-800 tracking-tight">{ props.product.name }</h2>
-                <p class="mb-2 text-gray-600 text-base">{ props.product.description }</p>
-                <div class="mb-6 text-xl font-semibold text-blue-700">
-                    { format!("${:.2}", props.product.price as f32 / 100.0) }
-                </div>
-                {
-                    if let Some((amt, last4, brand, receipt_url)) = &*success {
-                        let card_line = match (brand.as_str(), last4.as_str()) {
-                            ("<unknown>", "<unknown>") => None,
-                            ("<unknown>", last4)       => Some(format!("Card ending in {}", last4)),
-                            (brand, "<unknown>")       => Some(format!("Paid with {} card", brand)),
-                            (brand, last4)             => Some(format!("Card: {} ending in {}", brand, last4)),
-                        };
+        <div class="min-h-screen bg-slate-50 flex flex-col items-center pt-8 px-2">
+            <div class="w-full max-w-4xl flex flex-col items-center">
+                // Payment/checkout card
+                <div class="w-full max-w-2xl bg-white rounded-2xl shadow-lg p-8 flex flex-col mb-8 border border-slate-100">
+                    <button onclick={on_back}
+                            class="mb-4 text-blue-500 hover:text-blue-700 font-medium text-sm text-left"
+                            aria-label="Back to product list">
+                        {"← Back"}
+                    </button>
+                    <h2 class="text-2xl font-bold mb-1 text-gray-800 tracking-tight">{ &props.product.name }</h2>
+                    <p class="mb-2 text-gray-600 text-base">{ &props.product.description }</p>
+                    <div class="mb-6 text-2xl font-extrabold text-blue-700 tracking-tight">
+                        { format!("${:.2}", props.product.price as f32 / 100.0) }
+                    </div>
+                    {
+                        if let Some((amt, last4, brand, receipt_url)) = &*success {
+                            let card_line = match (brand.as_str(), last4.as_str()) {
+                                ("<unknown>", "<unknown>") => None,
+                                ("<unknown>", last4)       => Some(format!("Card ending in {}", last4)),
+                                (brand, "<unknown>")       => Some(format!("Paid with {} card", brand)),
+                                (brand, last4)             => Some(format!("Card: {} ending in {}", brand, last4)),
+                            };
 
-                        
-                        html! {
-                            <div class="rounded-lg bg-green-50 p-4 shadow-inner flex flex-col items-center">
-                                <div class="text-green-700 text-lg font-semibold mb-2">{"✅ Payment Successful"}</div>
-                                <div class="text-gray-900 text-xl font-bold mb-1">{ &props.product.name }</div>
-                                <div class="text-gray-600 mb-4">{ &props.product.description }</div>
-                                <div class="text-green-700 text-base">{ format!("You paid ${:.2}", amt) }</div>
-                                <div class="text-gray-700 text-base mb-1">
-                                    { card_line }
-                                </div>
-                                {
-                                    if let Some(url) = receipt_url {
-                                        html! {
-                                            <a href={url.to_string()} target="_blank"
-                                               class="text-blue-600 underline text-sm mt-2">
-                                                {"View receipt"}
-                                            </a>
-                                        }
-                                    } else {
-                                        Html::default()
-                                    }
-                                }
-                            </div>
-                        }
-                    } else {
-                        html! {
-                            <>
-                                <div id="payment-element" class="mb-4"/>
-                                <button onclick={on_click}
-                                    disabled={!stripe_ready || *loading}
-                                    class="w-full mt-2 py-2 rounded font-semibold shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:ring-2 focus:ring-blue-400 focus:outline-none transition disabled:opacity-60">
+                            html! {
+                                <div class="rounded-lg bg-green-50 p-4 shadow-inner flex flex-col items-center">
+                                    <div class="text-green-700 text-lg font-semibold mb-2">{"✅ Payment Successful"}</div>
+                                    <div class="text-gray-900 text-xl font-bold mb-1">{ &props.product.name }</div>
+                                    <div class="text-gray-600 mb-4">{ &props.product.description }</div>
+                                    <div class="text-green-700 text-base font-bold">{ format!("You paid ${:.2}", amt) }</div>
+                                    <div class="text-gray-700 text-base mb-1">
+                                        { card_line }
+                                    </div>
                                     {
-                                        if *loading {
-                                            "Processing…".to_string()
+                                        if let Some(url) = receipt_url {
+                                            html! {
+                                                <a href={url.to_string()} target="_blank"
+                                                   class="text-blue-600 underline text-sm mt-2">
+                                                    {"View receipt"}
+                                                </a>
+                                            }
                                         } else {
-                                            format!("Pay ${:.2}", props.product.price as f32 / 100.0)
+                                            Html::default()
                                         }
                                     }
-                                </button>
-                                {
-                                    if let Some(msg) = &*error {
-                                        html! { <p class="mt-3 text-sm text-red-600">{ msg.clone() }</p> }
-                                    } else {
-                                        Html::default()
+                                </div>
+                            }
+                        } else {
+                            html! {
+                                <>
+                                    <div id="payment-element" class="mb-4"/>
+                                    <button onclick={on_click}
+                                        disabled={!stripe_ready || *loading}
+                                        class="w-full mt-2 py-2 rounded font-semibold shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:ring-2 focus:ring-blue-400 focus:outline-none transition disabled:opacity-60 text-lg">
+                                        {
+                                            if *loading {
+                                                "Processing…".to_string()
+                                            } else {
+                                                format!("Pay ${:.2}", props.product.price as f32 / 100.0)
+                                            }
+                                        }
+                                    </button>
+                                    {
+                                        if let Some(msg) = &*error {
+                                            html! { <p class="mt-3 text-sm text-red-600">{ msg.clone() }</p> }
+                                        } else {
+                                            Html::default()
+                                        }
                                     }
-                                }
-                            </>
+                                </>
+                            }
                         }
                     }
-                }
+                </div>
+
+                // Divider
+                <div class="my-6 h-px bg-slate-200 w-full" />
+
+                // Section label
+                <div class="mb-4 w-full flex flex-col items-center">
+                    <div class="text-xs uppercase tracking-wider font-semibold text-slate-400 mb-2">
+                        {"Test Card Numbers (For Testing Purposes Only)"}
+                    </div>
+                </div>
+
+                // Test cards
+                <TestCardReference />
+            </div>
+        </div>
+    }
+}
+#[function_component(TestCardReference)]
+pub fn test_card_reference() -> Html {
+    let valid_cards = vec![
+        (
+            "Visa",
+            "4242 4242 4242 4242",
+            "Any 3 digits",
+            "Any future date",
+        ),
+        (
+            "Mastercard",
+            "5555 5555 5555 4444",
+            "Any 3 digits",
+            "Any future date",
+        ),
+        (
+            "American Express",
+            "3782 822463 10005",
+            "Any 4 digits",
+            "Any future date",
+        ),
+        (
+            "Discover",
+            "6011 1111 1111 1117",
+            "Any 3 digits",
+            "Any future date",
+        ),
+    ];
+
+    let invalid_cards = vec![
+        (
+            "Insufficient Funds",
+            "4000 0000 0000 9995",
+            "Any 3 digits",
+            "Any future date",
+            "card_declined: insufficient_funds",
+        ),
+        (
+            "Lost Card",
+            "4000 0000 0000 9987",
+            "Any 3 digits",
+            "Any future date",
+            "card_declined: lost_card",
+        ),
+        (
+            "Expired Card",
+            "4000 0000 0000 0069",
+            "Any 3 digits",
+            "Expired date",
+            "expired_card",
+        ),
+        (
+            "Incorrect CVC",
+            "4000 0000 0000 0127",
+            "Wrong 3 digits",
+            "Any future date",
+            "incorrect_cvc",
+        ),
+    ];
+
+    html! {
+        <div class="w-full max-w-4xl mx-auto flex flex-col md:flex-row gap-8 my-8">
+            // VALID CARDS
+            <div class="flex-1 bg-white rounded-xl shadow-md border border-slate-100 p-6">
+                <h3 class="text-lg font-bold text-green-700 mb-4">{"Valid Test Cards"}</h3>
+                <table class="w-full text-sm table-auto">
+                    <thead>
+                        <tr class="text-slate-500 border-b">
+                            <th class="text-left pb-2">{"Brand"}</th>
+                            <th class="text-left pb-2">{"Card Number"}</th>
+                            <th class="text-left pb-2">{"CVC"}</th>
+                            <th class="text-left pb-2">{"Exp."}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        { for valid_cards.iter().map(|(brand, number, cvc, exp)| html! {
+                            <tr class="hover:bg-slate-50 group cursor-pointer select-all">
+                                <td class="py-1 font-semibold text-slate-700">{ brand }</td>
+                                <td class="py-1 tabular-nums text-slate-800">{ number }</td>
+                                <td class="py-1">{ cvc }</td>
+                                <td class="py-1">{ exp }</td>
+                            </tr>
+                        }) }
+                    </tbody>
+                </table>
+                <div class="text-xs text-slate-400 mt-2">{"Click any value to copy. Use any future date."}</div>
+            </div>
+
+            // INVALID CARDS
+            <div class="flex-1 bg-white rounded-xl shadow-md border border-slate-100 p-6">
+                <h3 class="text-lg font-bold text-red-700 mb-4">{"Invalid Test Cards"}</h3>
+                <table class="w-full text-sm table-auto">
+                    <thead>
+                        <tr class="text-slate-500 border-b">
+                            <th class="text-left pb-2">{"Scenario"}</th>
+                            <th class="text-left pb-2">{"Card Number"}</th>
+                            <th class="text-left pb-2">{"CVC"}</th>
+                            <th class="text-left pb-2">{"Exp."}</th>
+                            <th class="text-left pb-2">{"Error"}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        { for invalid_cards.iter().map(|(scenario, number, cvc, exp, err)| html! {
+                            <tr class="hover:bg-slate-50 group cursor-pointer select-all">
+                                <td class="py-1 font-semibold text-slate-700">{ scenario }</td>
+                                <td class="py-1 tabular-nums text-slate-800">{ number }</td>
+                                <td class="py-1">{ cvc }</td>
+                                <td class="py-1">{ exp }</td>
+                                <td class="py-1 text-xs text-slate-400">{ err }</td>
+                            </tr>
+                        }) }
+                    </tbody>
+                </table>
+                <div class="text-xs text-slate-400 mt-2">{"Click any value to copy. Use any future date unless noted."}</div>
             </div>
         </div>
     }
