@@ -4,12 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Yew Stripe</title>
+    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+
     <!-- SCSS entry point -->
     <!-- <link data-trunk rel="scss" href="src/style/index.scss"> -->
     
 <script type="module">
-import init, * as bindings from '/basic_checkout-7178e461a917cb3.js';
-const wasm = await init({ module_or_path: '/basic_checkout-7178e461a917cb3_bg.wasm' });
+import init, * as bindings from '/basic_checkout-610ee3a8846fcc45.js';
+const wasm = await init({ module_or_path: '/basic_checkout-610ee3a8846fcc45_bg.wasm' });
 
 
 window.wasmBindings = bindings;
@@ -18,7 +20,7 @@ window.wasmBindings = bindings;
 dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
 
 </script>
-<link rel="modulepreload" href="/basic_checkout-7178e461a917cb3.js" crossorigin="anonymous" integrity="sha384-+ZTAPVUTrHfuzFJFtoYnTZQdFsEEkyy2/XzjyTJTSQ8aC2gKltJmRXdzzcBnhiwZ"><link rel="preload" href="/basic_checkout-7178e461a917cb3_bg.wasm" crossorigin="anonymous" integrity="sha384-IvruYnZu4ZpXGsjLG8VzfyY1/BaFuj2uJ0NukLPEr5UgSE/mGndUjFROAqLxG3GN" as="fetch" type="application/wasm"></head>
+<link rel="modulepreload" href="/basic_checkout-610ee3a8846fcc45.js" crossorigin="anonymous" integrity="sha384-BfbVP/raPl+yO4Dtl6M87tjxogZ5gNhDXCkDF71n7YLE3AY6SJyE5C1GAjEFy7SQ"><link rel="preload" href="/basic_checkout-610ee3a8846fcc45_bg.wasm" crossorigin="anonymous" integrity="sha384-CsKPAVasHhuJJfYpGy1FsGnaZouQ+RR3eh2pe2I4upzy3W7zOYgDCUH59CYCyH7z" as="fetch" type="application/wasm"></head>
 <body>
     <div id="app"></div>
 <script>"use strict";
