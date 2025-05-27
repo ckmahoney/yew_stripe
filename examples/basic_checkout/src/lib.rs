@@ -111,6 +111,7 @@ struct CheckoutPageProps {
     on_back: Callback<()>,
 }
 
+
 #[function_component(CheckoutPage)]
 fn checkout_page(props: &CheckoutPageProps) -> Html {
     let stripe_ready = use_stripejs();
@@ -118,7 +119,8 @@ fn checkout_page(props: &CheckoutPageProps) -> Html {
     let client_secret = use_state(|| String::new());
     let error = use_state(|| None::<String>);
     let loading = use_state(|| false);
-    let success = use_state(|| None::<(f64, String)>);
+    // Now returns: amount, last4, brand, receipt_url (Option<String>)
+    let success = use_state(|| None::<(f64, String, String, Option<String>)>);
     let requested_amt = props.product.price;
 
     // Fetch client_secret for this product & mount Payment Element
@@ -126,8 +128,6 @@ fn checkout_page(props: &CheckoutPageProps) -> Html {
         let error = error.clone();
         let stripe_el = stripe_el.clone();
         let client_secret = client_secret.clone();
-        let ready = stripe_ready;
-        let amount = requested_amt;
         use_effect_with((stripe_ready.clone(), requested_amt), {
             let error = error.clone();
             let stripe_el = stripe_el.clone();
@@ -217,28 +217,27 @@ fn checkout_page(props: &CheckoutPageProps) -> Html {
                         PaymentResult::Success(_) => {
                             // retrieve full PaymentIntent
                             let stripe_js = s.into();
-                            let fn_retrieve = Reflect::get(
+                            let fn_retrieve = js_sys::Reflect::get(
                                 &stripe_js,
                                 &JsValue::from_str("retrievePaymentIntent"),
                             )
                             .expect("retrievePaymentIntent not found")
-                            .unchecked_into::<Function>();
-                            let promise: Promise = fn_retrieve
+                            .unchecked_into::<js_sys::Function>();
+                            let promise: js_sys::Promise = fn_retrieve
                                 .call1(&stripe_js, &JsValue::from_str(&cs))
                                 .unwrap()
                                 .unchecked_into();
                             let result = JsFuture::from(promise).await.unwrap();
                             let pi_js =
-                                Reflect::get(&result, &JsValue::from_str("paymentIntent")).unwrap();
-                            let pi_json: Value = pi_js.into_serde().unwrap_or_default();
+                                js_sys::Reflect::get(&result, &JsValue::from_str("paymentIntent")).unwrap();
+                            let pi_json: serde_json::Value = pi_js.into_serde().unwrap_or_default();
 
-                            // --- THIS IS THE IMPORTANT PART ---
+                            // --- Read expanded card data and receipt ---
                             let status = pi_json
                                 .get("status")
                                 .and_then(|v| v.as_str())
                                 .unwrap_or_default();
                             if status != "succeeded" {
-                                // Try to display the user-facing error
                                 let msg = pi_json
                                     .get("last_payment_error")
                                     .and_then(|err| err.get("message"))
@@ -261,25 +260,37 @@ fn checkout_page(props: &CheckoutPageProps) -> Html {
                                 loading.set(false);
                                 return;
                             }
-                            // ---- NORMAL SUCCESS FLOW ----
                             let amt_cents = pi_json
                                 .get("amount_received")
                                 .and_then(|v| v.as_i64())
                                 .or_else(|| pi_json.get("amount").and_then(|v| v.as_i64()))
                                 .unwrap_or(0);
                             let amount = amt_cents as f64 / 100.0;
-                            let last4 = pi_json
-                                .get("charges")
-                                .and_then(|c| c.get("data"))
-                                .and_then(|d| d.as_array())
-                                .and_then(|arr| arr.get(0))
-                                .and_then(|first| first.get("payment_method_details"))
-                                .and_then(|pmd| pmd.get("card"))
-                                .and_then(|card| card.get("last4"))
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("<unknown>")
-                                .to_string();
-                            success.set(Some((amount, last4)));
+                            let (last4, brand, receipt_url) = {
+                                let charges = pi_json.get("charges")
+                                    .and_then(|c| c.get("data"))
+                                    .and_then(|d| d.as_array());
+                                let first = charges.and_then(|arr| arr.get(0));
+                                let card = first
+                                    .and_then(|f| f.get("payment_method_details"))
+                                    .and_then(|pmd| pmd.get("card"));
+                                let last4 = card
+                                    .and_then(|c| c.get("last4"))
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("<unknown>")
+                                    .to_string();
+                                let brand = card
+                                    .and_then(|c| c.get("brand"))
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("<unknown>")
+                                    .to_string();
+                                let receipt_url = first
+                                    .and_then(|f| f.get("receipt_url"))
+                                    .and_then(|v| v.as_str())
+                                    .map(|s| s.to_string());
+                                (last4, brand, receipt_url)
+                            };
+                            success.set(Some((amount, last4, brand, receipt_url)));
                         }
                         PaymentResult::Error(err) => {
                             error.set(Some(err.message));
@@ -311,12 +322,36 @@ fn checkout_page(props: &CheckoutPageProps) -> Html {
                     { format!("${:.2}", props.product.price as f32 / 100.0) }
                 </div>
                 {
-                    if let Some((amt, last4)) = &*success {
+                    if let Some((amt, last4, brand, receipt_url)) = &*success {
+                        let card_line = match (brand.as_str(), last4.as_str()) {
+                            ("<unknown>", "<unknown>") => None,
+                            ("<unknown>", last4)       => Some(format!("Card ending in {}", last4)),
+                            (brand, "<unknown>")       => Some(format!("Paid with {} card", brand)),
+                            (brand, last4)             => Some(format!("Card: {} ending in {}", brand, last4)),
+                        };
+
+                        
                         html! {
                             <div class="rounded-lg bg-green-50 p-4 shadow-inner flex flex-col items-center">
                                 <div class="text-green-700 text-lg font-semibold mb-2">{"✅ Payment Successful"}</div>
+                                <div class="text-gray-900 text-xl font-bold mb-1">{ &props.product.name }</div>
+                                <div class="text-gray-600 mb-4">{ &props.product.description }</div>
                                 <div class="text-green-700 text-base">{ format!("You paid ${:.2}", amt) }</div>
-                                <div class="text-green-700 text-sm">{ format!("Card ending in {}", last4) }</div>
+                                <div class="text-gray-700 text-base mb-1">
+                                    { card_line }
+                                </div>
+                                {
+                                    if let Some(url) = receipt_url {
+                                        html! {
+                                            <a href={url.to_string()} target="_blank"
+                                               class="text-blue-600 underline text-sm mt-2">
+                                                {"View receipt"}
+                                            </a>
+                                        }
+                                    } else {
+                                        Html::default()
+                                    }
+                                }
                             </div>
                         }
                     } else {

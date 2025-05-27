@@ -66,6 +66,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                     .form(&[
                         ("amount", amount.to_string()),
                         ("currency", "usd".to_string()),
+                        ("expand[]", "charges.data.payment_method_details".to_string()),
                     ])
                     .send()?
                     .error_for_status()?
