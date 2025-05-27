@@ -251,7 +251,7 @@ pub async fn confirm_payment(
     if let Some(cs) = client_secret {
         Reflect::set(
             &opts,
-            &JsValue::from_str("paymentElement"),
+            &JsValue::from_str("elements"),
             elements.as_ref(),
         )
         .unwrap();

@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0] – 2025-05-27
+
+### Added
+- **Idomatic yew component `StripeCheckout`** as the suggested interface for managing payment flows.
+
+### Changed
+- **Basic checkout example** to use the new `StripeCheckout` component interface.
+
+
 ## [1.0.1] – 2025-05-27
 
 ### Added
