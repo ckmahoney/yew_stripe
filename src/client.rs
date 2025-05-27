@@ -249,12 +249,7 @@ pub async fn confirm_payment(
     // Build the JS options object dynamically
     let opts = Object::new();
     if let Some(cs) = client_secret {
-        Reflect::set(
-            &opts,
-            &JsValue::from_str("elements"),
-            elements.as_ref(),
-        )
-        .unwrap();
+        Reflect::set(&opts, &JsValue::from_str("elements"), elements.as_ref()).unwrap();
         Reflect::set(
             &opts,
             &JsValue::from_str("clientSecret"),

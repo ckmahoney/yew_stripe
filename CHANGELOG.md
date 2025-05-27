@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+
+## [1.1.1] – 2025-05-27
+
+### Added
+- **Documentation for modules and most symbols** in the new checkout component and examples.
+
+
 ## [1.1.0] – 2025-05-27
 
 ### Added

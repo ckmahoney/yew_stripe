@@ -9,11 +9,17 @@ use wasm_bindgen::prelude::*;
 use yew::prelude::*;
 use yew_stripe::{client::StripeError, StripeCheckout, StripeCheckoutSuccess};
 
+
+/// Response from our backend when creating a PaymentIntent.
+/// 
+/// **Configurable**: your server should return a JSON object matching this shape, or you should update this to match your server's response type.
 #[derive(Deserialize)]
 struct CreatePIResponse {
+    /// The PaymentIntent client secret, used by StripeCheckout to confirm the payment.
     client_secret: String,
 }
 
+/// A product available for purchase in this demo store.
 #[derive(Clone, PartialEq)]
 struct Product {
     id: usize,
@@ -22,6 +28,7 @@ struct Product {
     price: u32, // in cents
 }
 
+/// Static list of products. Change this to ship your own catalog.
 const PRODUCTS: &[Product] = &[
     Product {
         id: 1,
@@ -43,17 +50,20 @@ const PRODUCTS: &[Product] = &[
     },
 ];
 
+/// Application view state: product list or checkout page.
 #[derive(PartialEq)]
 enum AppView {
     ProductList,
     Checkout { product: Product },
 }
 
+/// Entry point for the WASM module.
 #[wasm_bindgen(start)]
 pub fn start() {
     yew::Renderer::<App>::new().render();
 }
 
+/// Root component managing view state.
 #[function_component(App)]
 fn app() -> Html {
     let view = use_state(|| AppView::ProductList);
@@ -98,12 +108,19 @@ fn app() -> Html {
     }
 }
 
+/// Props for the checkout page component.
 #[derive(Properties, PartialEq, Clone)]
 struct CheckoutPageProps {
+    /// The product being purchased.
     product: Product,
+    /// Callback to navigate back to the product list.
     on_back: Callback<()>,
 }
 
+/// Checkout page: fetches a client secret and renders StripeCheckout.
+///
+/// - Updates when `props.product` changes.
+/// - **Configurable**: adjust `backend` URL below to point at your server.
 #[function_component(CheckoutPage)]
 fn checkout_page(props: &CheckoutPageProps) -> Html {
     let client_secret = use_state(|| None::<String>);
@@ -144,6 +161,7 @@ fn checkout_page(props: &CheckoutPageProps) -> Html {
         });
     }
 
+    // on_success callback for StripeCheckout
     let on_success = {
         let paid = paid.clone();
         Callback::from(move |s: StripeCheckoutSuccess| {
@@ -151,6 +169,7 @@ fn checkout_page(props: &CheckoutPageProps) -> Html {
         })
     };
 
+    // on_error callback for StripeCheckout
     let on_error = {
         let error = error.clone();
         Callback::from(move |err: StripeError| {
@@ -158,6 +177,7 @@ fn checkout_page(props: &CheckoutPageProps) -> Html {
         })
     };
 
+    // Handler to go back to product list
     let on_back = {
         let on_back = props.on_back.clone();
         Callback::from(move |_| on_back.emit(()))
@@ -235,8 +255,12 @@ fn checkout_page(props: &CheckoutPageProps) -> Html {
     }
 }
 
+/// Renders tables of valid and invalid test card numbers.
+///
+/// **Useful for testing**: no need to memorize real card data here.
 #[function_component(TestCardReference)]
 pub fn test_card_reference() -> Html {
+    // Lists of test card data; update if Stripe changes test numbers.
     let valid_cards = vec![
         (
             "Visa",

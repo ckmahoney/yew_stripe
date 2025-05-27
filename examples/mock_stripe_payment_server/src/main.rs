@@ -1,8 +1,25 @@
+//! A minimal HTTP server that proxies requests to Stripe’s PaymentIntent API
+//! and exposes a webhook endpoint.  
+//! 
+//! Designed for local development and testing with Yew + yew_stripe apps.  
+//! 
+//! ## Configuration  
+//! - **STRIPE_SECRET_KEY** (required): Your Stripe Secret Key (`sk_…`).  
+//! - **MOCK_STRIPE_SERVER_PORT** (optional): TCP port to listen on (default: `2718`).  
+
+
 use std::{env, io::Read};
 use tiny_http::{Server, Response, Method, Header};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
+
+/// Payload expected from the client when creating a PaymentIntent.
+///
+/// **Fields**:
+/// - `amount` (in cents) **required**
+/// - `product` (optional product identifier or name)
+/// - `description` (optional description for your records)
 #[derive(Deserialize)]
 struct CreateRequest {
     amount: u32,
@@ -10,6 +27,10 @@ struct CreateRequest {
     description: Option<String>,
 }
 
+/// Subset of Stripe’s PaymentIntent JSON response used for our logic.
+///
+/// We only deserialize the `client_secret` and, optionally, charges info
+/// so we can return card and receipt details in our simplified response.
 #[derive(Deserialize)]
 struct StripePI {
     client_secret: String,
@@ -18,11 +39,13 @@ struct StripePI {
     charges: Option<StripeCharges>,
 }
 
+/// Container for charge objects in the StripePI response.
 #[derive(Deserialize)]
 struct StripeCharges {
     data: Vec<StripeCharge>,
 }
 
+/// Represents a single charge in Stripe’s response.
 #[derive(Deserialize)]
 struct StripeCharge {
     receipt_url: Option<String>,
@@ -31,17 +54,20 @@ struct StripeCharge {
     outcome: Option<StripeOutcome>,
 }
 
+/// Nested details for the payment method (e.g. card) used in the charge.
 #[derive(Deserialize)]
 struct StripePaymentMethodDetails {
     card: Option<StripeCard>,
 }
 
+/// Card-specific details nested under `payment_method_details`.
 #[derive(Deserialize)]
 struct StripeCard {
     brand: Option<String>,
     last4: Option<String>,
 }
 
+/// Outcome information for 3DS/SCA or other risk checks.
 #[derive(Deserialize)]
 struct StripeOutcome {
     seller_message: Option<String>,
@@ -50,6 +76,12 @@ struct StripeOutcome {
     r#type: Option<String>,
 }
 
+/// JSON response returned to the client after creating a PaymentIntent.
+///
+/// Mirrors `CreateRequest` plus Stripe details:
+/// - `client_secret`: for front-end confirmation
+/// - `amount`, `currency`: echoed or defaulted
+/// - `last4`, `brand`, `receipt_url`, `charge_status`, `outcome`: card metadata
 #[derive(Serialize)]
 struct CreateResponse {
     client_secret: String,
@@ -64,6 +96,12 @@ struct CreateResponse {
     outcome: Option<String>,
 }
 
+/// Entry point: starts the HTTP server and routes requests.
+///
+/// - Listens on `127.0.0.1:${MOCK_STRIPE_SERVER_PORT}` (default `2718`).  
+/// - Proxies POST `/create-payment-intent` to Stripe’s API and returns a simplified JSON.  
+/// - Accepts POST `/webhook` and logs the payload.  
+/// - Handles CORS preflight (`OPTIONS`) automatically for both endpoints.
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let secret_key = env::var("STRIPE_SECRET_KEY")
         .expect("Set STRIPE_SECRET_KEY in your environment");

@@ -1,9 +1,8 @@
 mod bindings;
+mod checkout_component;
 pub mod client;
 mod interop;
-mod checkout_component;
-
 
 pub use bindings::*;
-pub use interop::*;
 pub use checkout_component::*;
+pub use interop::*;
