@@ -1,20 +1,20 @@
 // src/lib.rs
 
-use wasm_bindgen::prelude::*;
-use wasm_bindgen::JsValue;
-use wasm_bindgen_futures::{spawn_local, JsFuture};
-use yew::prelude::*;
-use yew_stripe::client::{
-    ElementsOptions, ConfirmPaymentParams, mount_payment_element, confirm_payment, PaymentResult,
-};
-use yew_stripe::use_stripejs;
 use gloo_net::http::Request;
+use gloo_utils::format::JsValueSerdeExt;
+use js_sys::{Function, Promise, Reflect}; // ← use js_sys (should be in your dependencies)
 use serde::Deserialize;
 use serde_json::Value;
-use web_sys::js_sys;
-use js_sys::{Reflect, Promise, Function}; // ← use js_sys (should be in your dependencies)
+use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use gloo_utils::format::JsValueSerdeExt;
+use wasm_bindgen::JsValue;
+use wasm_bindgen_futures::{spawn_local, JsFuture};
+use web_sys::js_sys;
+use yew::prelude::*;
+use yew_stripe::client::{
+    confirm_payment, mount_payment_element, ConfirmPaymentParams, ElementsOptions, PaymentResult,
+};
+use yew_stripe::use_stripejs;
 
 #[derive(Deserialize)]
 struct CreatePIResponse {
@@ -30,9 +30,24 @@ struct Product {
 }
 
 const PRODUCTS: &[Product] = &[
-    Product { id: 1, name: "Cap",     description: "A stylish cap to keep the sun away. Great for adventures and weekends. ☀️",    price: 500 },
-    Product { id: 2, name: "T-Shirt", description: "Soft, comfy, and goes with anything. The classic tee for every day. 👕",        price: 2900 },
-    Product { id: 3, name: "Shoes",   description: "Run faster with these sneakers. Comfort meets style. 🏃",                      price: 11300 },
+    Product {
+        id: 1,
+        name: "Cap",
+        description: "A stylish cap to keep the sun away. Great for adventures and weekends. ☀️",
+        price: 500,
+    },
+    Product {
+        id: 2,
+        name: "T-Shirt",
+        description: "Soft, comfy, and goes with anything. The classic tee for every day. 👕",
+        price: 2900,
+    },
+    Product {
+        id: 3,
+        name: "Shoes",
+        description: "Run faster with these sneakers. Comfort meets style. 🏃",
+        price: 11300,
+    },
 ];
 
 #[derive(PartialEq)]
@@ -98,13 +113,13 @@ struct CheckoutPageProps {
 
 #[function_component(CheckoutPage)]
 fn checkout_page(props: &CheckoutPageProps) -> Html {
-    let stripe_ready   = use_stripejs();
-    let stripe_el      = use_mut_ref(|| None::<(JsValue, JsValue)>);
-    let client_secret  = use_state(|| String::new());
-    let error          = use_state(|| None::<String>);
-    let loading        = use_state(|| false);
-    let success        = use_state(|| None::<(f64, String)>);
-    let requested_amt  = props.product.price;
+    let stripe_ready = use_stripejs();
+    let stripe_el = use_mut_ref(|| None::<(JsValue, JsValue)>);
+    let client_secret = use_state(|| String::new());
+    let error = use_state(|| None::<String>);
+    let loading = use_state(|| false);
+    let success = use_state(|| None::<(f64, String)>);
+    let requested_amt = props.product.price;
 
     // Fetch client_secret for this product & mount Payment Element
     {
@@ -132,15 +147,28 @@ fn checkout_page(props: &CheckoutPageProps) -> Html {
                             .unwrap();
                         let resp = req.send().await;
                         let cs = match resp {
-                            Ok(r) if r.ok() => r.json::<CreatePIResponse>().await
+                            Ok(r) if r.ok() => r
+                                .json::<CreatePIResponse>()
+                                .await
                                 .map(|d| d.client_secret)
-                                .unwrap_or_else(|e| { error.set(Some(format!("Bad JSON: {}", e))); String::new() }),
-                            Ok(r) => { error.set(Some(format!("Server error: {}", r.status()))); String::new() }
-                            Err(e) => { error.set(Some(format!("Network error: {}", e))); String::new() }
+                                .unwrap_or_else(|e| {
+                                    error.set(Some(format!("Bad JSON: {}", e)));
+                                    String::new()
+                                }),
+                            Ok(r) => {
+                                error.set(Some(format!("Server error: {}", r.status())));
+                                String::new()
+                            }
+                            Err(e) => {
+                                error.set(Some(format!("Network error: {}", e)));
+                                String::new()
+                            }
                         };
-                        if cs.is_empty() { return; }
+                        if cs.is_empty() {
+                            return;
+                        }
                         client_secret.set(cs.clone());
-        
+
                         let opts = ElementsOptions {
                             client_secret: cs.into(),
                             appearance: None,
@@ -156,18 +184,19 @@ fn checkout_page(props: &CheckoutPageProps) -> Html {
                 || ()
             }
         });
-        
     }
 
     // Payment submit
     let on_click = {
-        let error    = error.clone();
-        let loading  = loading.clone();
-        let success  = success.clone();
+        let error = error.clone();
+        let loading = loading.clone();
+        let success = success.clone();
         let stripe_el = stripe_el.clone();
         let cs = (*client_secret).clone();
         Callback::from(move |_| {
-            if *loading || success.is_some() { return; }
+            if *loading || success.is_some() {
+                return;
+            }
             if let Some((s, e)) = &*stripe_el.borrow() {
                 let s = s.clone();
                 let e = e.clone();
@@ -183,27 +212,64 @@ fn checkout_page(props: &CheckoutPageProps) -> Html {
                         save_payment_method: None,
                         extra: None,
                     };
+
                     match confirm_payment(&s.clone().into(), &e.into(), params, None, true).await {
                         PaymentResult::Success(_) => {
                             // retrieve full PaymentIntent
                             let stripe_js = s.into();
-                            let fn_retrieve = Reflect::get(&stripe_js, &JsValue::from_str("retrievePaymentIntent"))
-                                .expect("retrievePaymentIntent not found")
-                                .unchecked_into::<Function>();
+                            let fn_retrieve = Reflect::get(
+                                &stripe_js,
+                                &JsValue::from_str("retrievePaymentIntent"),
+                            )
+                            .expect("retrievePaymentIntent not found")
+                            .unchecked_into::<Function>();
                             let promise: Promise = fn_retrieve
                                 .call1(&stripe_js, &JsValue::from_str(&cs))
                                 .unwrap()
                                 .unchecked_into();
                             let result = JsFuture::from(promise).await.unwrap();
-                            let pi_js = Reflect::get(&result, &JsValue::from_str("paymentIntent"))
-                                .unwrap();
+                            let pi_js =
+                                Reflect::get(&result, &JsValue::from_str("paymentIntent")).unwrap();
                             let pi_json: Value = pi_js.into_serde().unwrap_or_default();
-                            let amt_cents = pi_json.get("amount_received")
+
+                            // --- THIS IS THE IMPORTANT PART ---
+                            let status = pi_json
+                                .get("status")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or_default();
+                            if status != "succeeded" {
+                                // Try to display the user-facing error
+                                let msg = pi_json
+                                    .get("last_payment_error")
+                                    .and_then(|err| err.get("message"))
+                                    .and_then(|v| v.as_str())
+                                    .map(|s| s.to_string())
+                                    .or_else(|| {
+                                        pi_json
+                                            .get("charges")
+                                            .and_then(|c| c.get("data"))
+                                            .and_then(|d| d.as_array())
+                                            .and_then(|arr| arr.get(0))
+                                            .and_then(|first| first.get("failure_message"))
+                                            .and_then(|v| v.as_str())
+                                            .map(|s| s.to_string())
+                                    })
+                                    .unwrap_or_else(|| {
+                                        "Payment failed, please try another card.".to_string()
+                                    });
+                                error.set(Some(msg));
+                                loading.set(false);
+                                return;
+                            }
+                            // ---- NORMAL SUCCESS FLOW ----
+                            let amt_cents = pi_json
+                                .get("amount_received")
                                 .and_then(|v| v.as_i64())
                                 .or_else(|| pi_json.get("amount").and_then(|v| v.as_i64()))
                                 .unwrap_or(0);
                             let amount = amt_cents as f64 / 100.0;
-                            let last4 = pi_json.get("charges")
+                            let last4 = pi_json
+                                .get("charges")
                                 .and_then(|c| c.get("data"))
                                 .and_then(|d| d.as_array())
                                 .and_then(|arr| arr.get(0))
@@ -219,6 +285,7 @@ fn checkout_page(props: &CheckoutPageProps) -> Html {
                             error.set(Some(err.message));
                         }
                     }
+
                     loading.set(false);
                 });
             }
